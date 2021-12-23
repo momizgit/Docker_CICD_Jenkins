@@ -1,0 +1,1 @@
+docker run --name momiz-guacamole --link momiz-guacd:guacd --link momiz-mysql:mysql -e MYSQL_DATABASE=guacamole_db -e MYSQL_USER=guacamole_user -e MYSQL_PASSWORD=Riy\&Rab2011 -d -p 127.0.0.1:8080:8080 guacamole/guacamole

@@ -1,0 +1,142 @@
+Kubernetes Setup
+
+
+sudo apt-get update && sudo apt upgrade -y
+sudo apt install docker.io
+sudo groupadd docker
+sudo usermod -aG docker $USER
+newgrp docker
+docker run hello-world
+docker ps -a
+sudo systemctl start docker
+sudo systemctl enable docker
+sudo apt-get install -y apt-transport-https ca-certificates curl
+sudo curl -fsSLo /usr/share/keyrings/kubernetes-archive-keyring.gpg https://packages.cloud.google.com/apt/doc/apt-key.gpg
+echo "deb [signed-by=/usr/share/keyrings/kubernetes-archive-keyring.gpg] https://apt.kubernetes.io/ kubernetes-xenial main" | sudo tee /etc/apt/sources.list.d/kubernetes.list
+
+
+sudo apt-get update
+sudo apt-get install -y kubelet kubeadm kubectl
+sudo apt-mark hold kubelet kubeadm kubectl
+
+
+Disable swap
+____________
+
+In order to run Kubernetes, you must first disable swap. To do this, issue the command:
+
+sudo swapoff -a
+To make that permanent (otherwise swap will re-enable every time you reboot), issue the command:
+
+sudo nano /etc/fstab
+In the fstab file, comment out the swap entry (by adding a leading # character):
+
+/swap.img      none    swap    sw      0       0
+Save and close that file.
+
+
+sudo cat <<EOF | sudo tee /etc/docker/daemon.json
+{
+  "exec-opts": ["native.cgroupdriver=systemd"],
+  "log-driver": "json-file",
+  "log-opts": {
+    "max-size": "100m"
+  },
+  "storage-driver": "overlay2"
+}
+EOF
+
+sudo systemctl enable docker
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+
+Initialize your master
+______________________
+With everything installed, go to the machine that will serve as the Kubernetes master and issue the command:
+
+sudo kubeadm init
+
+
+
+Start Cluster
+_____________
+
+sudo ufw disable
+sudo kubeadm init \
+  --apiserver-advertise-address=10.2.2.50 \
+  --pod-network-cidr 192.168.0.0/16 \
+  --upload-certs
+
+sudo kubeadm init --pod-network-cidr=192.178.0.0/16
+
+
+Before you join a node, you need to issue the following commands (as a regular user):
+
+sudo cp /etc/kubernetes/admin.conf $HOME/
+sudo chown $(id -u):$(id -g) $HOME/admin.conf
+export KUBECONFIG=$HOME/admin.conf
+
+sudo mkdir -p $HOME/.kube
+cp /etc/kubernetes/admin.conf $HOME/
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+Alternatively you can also export KUBECONFIG variable like this:
+export KUBECONFIG=$HOME/.kube/config
+
+
+
+get toke to join nodes
+______________________
+sudo kubeadm token create
+sudo kubeadm token list
+sudo kubeadm token create --print-join-command
+
+
+
+Joining a node
+______________
+With everything in place, you are ready to join the node to the master. To do this, go to the node's terminal and issue the command:
+
+
+sudo ufw disable
+sudo kubeadm join --token TOKEN MASTER_IP:6443
+
+sudo kubeadm join 10.2.2.50:6443 --token z1jtit.b310l9k2p0wawako \
+        --discovery-token-ca-cert-hash sha256:a3310885a2ad768f25f1eeca7b981dfd8b7d7c2fedf7367cc2ab01c61e03f41d
+
+
+
+
+
+Troubleshooting:
+_______________
+if node not connecting or kubelet not working
+
+sudo kubeadm reset -f
+sudo iptables -F && iptables -t nat -F && iptables -t mangle -F && iptables -X
+
+sudo swapoff -a
+sudo systemctl start kubelet
+
+
+Node not connecting:
+____________________
+
+sudo kubeadm reset -f
+sudo systemctl daemon-reload
+sudo systemctl restart docker
+sudo systemctl restart kubelet
+sudo swapoff -a
+sudo sed -i '/ swap / s/^/#/' /etc/fstab
+
+
+
+
+Deploying a pod network
+_______________________
+You must deploy a pod network before anything will actually function properly. I'll demonstrate this by installing the Flannel pod network. This can be done with two commands (run on the master):
+
+sudo kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/kube-flannel.yml
+sudo kubectl apply -f https://raw.githubusercontent.com/coreos/flannel/master/Documentation/k8s-manifests/kube-flannel-rbac.yml
+
